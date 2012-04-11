@@ -1,5 +1,5 @@
 {
-  "name": "Harvest Status",
+  "name": "Harvest4Chrome",
   "version": "1.0",
   "description": "Shows Harvest status and quick action options.",
   "browser_action": {
