@@ -1,0 +1,141 @@
+<html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script>
+      var projects = null;
+      
+      function save() {
+        localStorage['user'] = $('#user').val();
+        localStorage['pass'] = $('#pass').val();
+        var data = [];
+        $('div#defaults p').each(function(index, details){
+          var project_id = $(details).find('.project').first().val();
+          var task_id = $(details).find('.task').first().val();
+          var notes = $(details).find('.notes').first().val();
+          if (project_id && task_id && notes) data.push([project_id, task_id, notes]);
+        });
+        localStorage['defaults'] = JSON.stringify(data);
+      }
+      function retrieve() {
+        chrome.extension.sendRequest({refresh: 1}, function(response) { update(response.data); });
+        $('#user').val(localStorage['user']);
+        $('#pass').val(localStorage['pass']);
+        var defaults = JSON.parse(localStorage['defaults']);
+        $(defaults).each(function(index, d){
+          addDefault(d);
+        });
+      }
+      function addDefault(details) {
+        var project_id = details ? details[0] : '';
+        var task_id = details ? details[1] : '';
+        var notes = details ? details[2] : '';
+        var row = $('<p><input type="text" class="notes" name="notes" value="'+notes+'" /></p>');
+        var taskF = task_field(task_id);
+        var projectF = project_field(project_id);
+        row.prepend(taskF);        
+        row.prepend(projectF);
+        set_tasks(taskF, projectF.val());
+        row.append($('<input type="button" value="delete" />').click(deleteRow));
+        $('#defaults').append(row);
+      }
+      
+      function update(data) {
+        console.log(data);
+        
+        if (data.projects) {
+          projects = data.projects;
+          
+          $('.task').each(function(index, field){
+            if ($(field).is('input')) {
+              var r = task_field();
+              r.data('val', $(field).val());
+              $(field).replaceWith(r);
+            }
+          });
+          
+          $('.project').each(function(index, field){
+            if ($(field).is('input')) {
+              var task_field = $(field).siblings('.task').first();
+              var val = $(field).val();
+              $(field).replaceWith(project_field(val));
+              set_tasks(task_field, val);
+            }
+          });
+        }
+      }
+      
+      function project_field(project_id) {
+        if (projects) {
+          var change = "set_tasks($(this).siblings('.task'), $(this).val());";
+          var select = $('<select class="project" onchange="'+change+'"></select>');
+          $(projects).each(function(index, project){
+            var selected = (project.id == project_id) ? ' selected=selected' : '';
+            select.append($('<option value="'+ project.id + '"' + selected + '>'+ project.client + ' - ' + project.name +'</option>'));
+          });
+          return select;
+        } else {
+          return $('<input type="text" class="project" name="project" value="'+project_id+'" />');
+        }
+      }
+      
+      function task_field(task_id) {
+        if (projects) {
+          return $('<select class="task"></select>');
+        } else {
+          return $('<input type="text" class="task" name="task" value="'+task_id+'" />');
+        }
+      }
+      
+      function set_tasks(field, project_id) {
+        if (projects) {
+          var task_id = field.val() || field.data('val');
+          console.log([field, project_id, task_id]);
+          field.empty();
+          
+          var project = $.grep(projects, function(project, index){
+            return project.id == project_id;
+          })[0];
+          
+          if (project) {
+            $(project.tasks).each(function(index, task){
+              var selected = (task_id == task.id) ? 'selected=selected' : ''
+              field.append($('<option value="'+task.id+'" '+ selected+'>'+task.name+'</option>'))
+            });
+          }
+        }
+      }
+      
+      function deleteRow() {
+        $(this).closest('p').remove();
+      }
+    </script>
+    <style>
+      body {
+        font-family: sans-serif;
+      }
+      label {
+        display: block;
+        float: left;
+        width: 150px;
+      }
+      input.wide {
+        width: 200px;
+      }
+    </style>
+  </head>
+  <body onload="retrieve()">
+    <h1>Harvest Manager Settings</h1>
+    <p>
+      <label for="username">Harvest username</label>
+      <input type="text" name="user" id="user" class="wide" />
+    </p>
+    <p>
+      <label for="username">Harvest password</label>
+      <input type="text" name="pass" id="pass" class="wide" />
+    </p>
+    <div id="defaults">
+      <label>Defaults</label><input type="button" value="Add" onclick="addDefault()">
+    </div>
+    <p><input type="submit" onclick="save()" value="Save" />
+  </body>
+</thml>

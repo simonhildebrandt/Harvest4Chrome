@@ -1,0 +1,147 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<script>
+  var daily_data = {};
+  
+  function send_request(path, method, string) {
+    if (!string) string = '';
+    var host = 'https://redant.harvestapp.com';
+    var user = localStorage['user'];
+    var pass = localStorage['pass'];
+    var auth_string = btoa(user+':'+pass);
+    var http = new XMLHttpRequest();
+    http.onreadystatechange = handler;
+    var request = http.open(method, host + path, false);
+    http.setRequestHeader('Accept', 'application/json');
+    http.setRequestHeader('Content-Type', 'application/json');
+    http.setRequestHeader('Authorization', 'Basic ' + auth_string);
+    http.send(string);
+    return true;
+  }
+
+  function request_entries() {
+    // Don't bother polling at night
+    var hour = (new Date()).getHours();
+    if (hour > 18 || hour < 8) {
+      return;
+    }
+    send_request('/daily', 'get');
+    
+    if (daily_data.projects) {
+      var defaultJSON = localStorage['defaults'];
+      if (defaultJSON) {
+        var defaults = JSON.parse(defaultJSON);
+        $(daily_data.day_entries).each(function(index, entry){
+          defaults = $.grep(defaults, function(d, index){
+            if (d[0] == entry.project_id && d[1] == entry.task_id && d[2] == entry.notes) {
+              return false;
+            } else {
+              return true;
+            }
+          });
+        });
+      
+        defaults = $.map(defaults, function(el, index) {
+          var result = {notes: el[2], hours: ' ', spent_at: ' '};
+          for (var p=0; p<daily_data.projects.length; p++) {
+            var project = daily_data.projects[p];
+            for (var t=0; t<project.tasks.length; t++) {
+              var task = project.tasks[t];
+              if (el[1] == task.id) {
+                result.task = task.name;
+                result.task_id = task.id;
+                break;
+              }
+            }
+            if (el[0] == project.id) {
+              result.client = project.client;
+              result.project = project.name;
+              result.project_id = project.id;
+              break;
+            }
+          }
+          return result;
+        });
+        // If we have any defaults that aren't active, add them as options to instantiate
+        daily_data.inactive_defaults = defaults;
+      }
+    }
+  }
+  
+  function create_timer(details) {
+    //var date_string = (new Date()).;//Tue, 17 Oct 2006
+    var data = {
+        notes: details[2],
+        hours: ' ',
+        project_id: details[0],
+        task_id: details[1],
+        spent_at: ' '
+    };
+    var string = JSON.stringify(data);
+    send_request('/daily/add', 'post', string);
+  }
+  
+  function handler() {
+    if(this.readyState == this.DONE) {
+      if(this.status == 200) {
+        if (this.responseText) {
+          result = JSON.parse( this.responseText );
+          if (result.day_entries) daily_data = result;
+        }
+      } else {
+        console.log("Not 200: "+this.status);
+        console.log(this.response);
+        daily_data.error = this.response;
+      }
+      update_display();
+    } else {
+      //console.log("Not done");
+    }
+  }
+
+  function update_display() {
+    var active = find_active_entry();
+    if (active) {
+      chrome.browserAction.setIcon({'path': 'harvest_favicon.png'});
+      chrome.browserAction.setBadgeText({'text': active.notes});
+    } else {
+      chrome.browserAction.setIcon({'path': 'harvest_favicon_angry.gif'});
+      chrome.browserAction.setBadgeText({'text': ""});
+    }
+  }
+  
+  function find_active_entry() {
+    if (daily_data.day_entries) {
+      var result = $.grep(daily_data.day_entries, (function(el, index){
+        return el.timer_started_at;
+      }));
+      return result[0];
+    }
+  }
+
+  chrome.extension.onRequest.addListener(
+    function(request, sender, sendResponse) {
+      console.log(sender.tab ? "from a content script:" + sender.tab.url : "from the extension");
+      if (request.refresh) {
+        //delete(daily_data.error);
+        sendResponse({data: daily_data});
+      } else if (request.toggle) {
+        // Toggle a timer
+        var entry = request.toggle;
+        console.log(['toggling', entry]);
+        if (entry.id) {
+          send_request('/daily/timer/'+entry.id, 'get');
+        } else {
+          send_request('/daily/add', 'post', JSON.stringify(entry));
+        }
+        request_entries();
+        sendResponse({data: daily_data});
+      } else {
+        sendResponse({}); // snub them.
+      }
+    }
+  );
+
+  window.setInterval(request_entries, 30000);
+  request_entries();
+  
+</script>

@@ -1,0 +1,14 @@
+{
+  "name": "Harvest Status",
+  "version": "1.0",
+  "description": "Shows Harvest status and quick action options.",
+  "browser_action": {
+    "default_icon": "harvest_favicon.png",
+    "popup": "popup.html"
+  },
+  "background_page": "background.html",
+  "options_page": "options.html",
+  "permissions": [
+    "https://*.harvestapp.com/"
+  ]
+}

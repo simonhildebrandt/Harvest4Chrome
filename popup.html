@@ -1,0 +1,89 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<script>
+  function handler() {
+    console.log("clicked " + this);
+    $(this).addClass('actioned');
+    chrome.extension.sendRequest({toggle: $(this).data()}, function(response) { render_entries(response.data); });
+  }
+  function render_entries(data) {
+    console.log(data);
+    $('#entries').empty();
+    if (data.day_entries) {
+      $.merge(data.day_entries, data.inactive_defaults);
+      $.each(data.day_entries, function(index, entry) {
+        console.log(entry);
+        add_entry(entry);
+      });
+    }
+    if (data.error) {
+      $('#entries').append($('<div class="clickable error">Error: '+data.error+'</div>').click(update));
+    }
+  }
+  
+  function add_entry(entry) {
+    var style = '';
+    if (entry.timer_started_at) { style = 'active' };
+    if (!entry.id) { style = 'inactive' };
+    var category = $('<div class="details">'+entry.client+'<br/>'+entry.project+'</div>');
+    var clickable = $('<div class="clickable '+style+'" href="#"><div class="notes">'+entry.notes+'</div><div class="hours">'+entry.hours+'</div></div>').click(handler).append(category);
+    clickable.data(entry, entry);
+    $('#entries').append(clickable);
+  }
+  
+  function update() {
+    chrome.extension.sendRequest({refresh: 1}, function(response) { render_entries(response.data); });
+  }
+  
+  update();
+</script>
+<style>
+  body {
+    font-family: sans-serif;
+  }
+  .actioned {
+    background-color: red;
+  }
+  div.clickable {
+    width: 350px;
+    margin-top: 2px;
+    border: 1px solid gray;
+    border-radius: 5px;
+    height: 3em;
+    background-color: #DDD;
+    cursor: hand;
+    position: relative;
+    padding: 5px;
+  }
+  div.clickable div.details {
+    font-size: smaller;
+    text-align: right;
+    opacity: .5;
+    right: 5px;
+    bottom: 5px;
+    position: absolute;
+  }
+  div.clickable div.notes {
+    left: 5px;
+    position: absolute;
+  }
+  div.clickable div.hours {
+    left: 5px;
+    position: absolute;
+    bottom: 5;
+    font-size: 1.3em;
+  }
+  div.inactive {
+    background-color: lightblue;
+    border-color: blue;
+  }
+  div.active {
+    background-color: lightgreen;
+    border-color: green;
+  }
+  div.error {
+    background-color: pink;
+    border-color: red;
+    height: auto;
+  }
+</style>
+<div id="entries"></div>
